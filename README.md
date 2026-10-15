@@ -162,6 +162,20 @@ is all it needs.
 Each member enters `https://bot.example.com` under **Settings → Share to Discord →
 Bot** in the suite, then presses **Connect Discord**.
 
+## For help
+
+<!-- Test server link goes here. -->
+
+Most problems come down to one of these:
+
+- **Sign-in fails with "Invalid OAuth2 redirect_uri"**: the redirect on the
+  OAuth2 tab must be exactly `PUBLIC_URL` followed by `/link/callback`.
+- **A channel is missing from the list**: the bot needs View Channel, Send
+  Messages, Embed Links and Attach Files there, and so does the person sharing.
+- **`/health` doesn't answer**: check that the hostname points at the server,
+  ports 80 and 443 are open, and the log (`docker compose logs bot` or
+  `journalctl -u tactics-bot`) shows no error.
+
 ## How it works
 
 The sign-in asks Discord only who the person is. The answer goes back through
