@@ -19,6 +19,12 @@ export interface Config {
   readonly dbPath: string;
   readonly httpPort: number;
   readonly httpHost: string;
+  /**
+   * The suite's update server, where /release reads the patch notes. Both
+   * null leaves /release answering that it is not set up.
+   */
+  readonly updateUrl: string | null;
+  readonly updateToken: string | null;
 }
 
 function required(name: string): string {
@@ -56,5 +62,7 @@ export function loadConfig(): Config {
     // Meant to sit behind a reverse proxy that terminates TLS, so by default
     // it is not reachable from anywhere else. The Docker image sets 0.0.0.0.
     httpHost: process.env.HTTP_HOST?.trim() || '127.0.0.1',
+    updateUrl: process.env.UPDATE_URL?.trim() || null,
+    updateToken: process.env.UPDATE_TOKEN?.trim() || null,
   };
 }

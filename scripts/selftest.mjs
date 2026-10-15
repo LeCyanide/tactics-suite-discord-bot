@@ -1,7 +1,7 @@
 /**
  * Headless checks for everything that would otherwise only be exercised by
- * hand against a live Discord connection: the schema, the plan endpoint and
- * the Connect Discord sign-in.
+ * hand against a live Discord connection: the schema, the plan endpoint,
+ * the Connect Discord sign-in and the /release patch notes.
  *
  *   npm run selftest
  *
@@ -19,6 +19,7 @@ import { openDatabase } from '../src/db.ts';
 import { MIGRATIONS } from '../src/migrations.ts';
 import { startHttpServer } from '../src/http.ts';
 import { Linker } from '../src/link.ts';
+import { fetchPatchNotes, parsePatchNotes, releaseMessages, rolePing } from '../src/release.ts';
 
 process.env.LOG_LEVEL = 'error';
 
@@ -42,6 +43,7 @@ function freshDb(name) {
 const CONFIG = {
   token: 'x', appId: '999', clientSecret: 'client-secret', publicUrl: 'https://bot.example.com',
   dbPath: ':memory:', httpPort: 0, httpHost: '127.0.0.1',
+  updateUrl: null, updateToken: null,
 };
 
 await check('migrations bring a new database to the current version', () => {
@@ -371,6 +373,119 @@ const PLAN_TOKEN = 'selftest-token-long-enough-to-pass';
   db.close();
 }
 
+
+{
+  const published = {
+    version: '2.1.0',
+    sections: [
+      { title: ' Changelog ', notes: ['  First thing ', 7, '', 'Second thing'] },
+      { title: 'Empty', notes: [] },
+      { title: 'In testing', notes: ['Share to Discord'] },
+    ],
+  };
+  const parsed = parsePatchNotes(published);
+
+  await check('patch notes keep their sections and drop what is not a note', () => {
+    assert.deepEqual(parsed, {
+      version: '2.1.0',
+      sections: [
+        { title: 'Changelog', notes: ['First thing', 'Second thing'] },
+        { title: 'In testing', notes: ['Share to Discord'] },
+      ],
+    });
+  });
+
+  await check('a flat list of notes is read as the changelog', () => {
+    assert.deepEqual(parsePatchNotes({ version: '2.1.0', notes: ['One', 'Two'] }).sections, [
+      { title: 'Changelog', notes: ['One', 'Two'] },
+    ]);
+  });
+
+  await check('patch notes without a version or a list are refused', () => {
+    assert.match(parsePatchNotes({ sections: [] }), /version/);
+    assert.match(parsePatchNotes({ version: '1.0.0' }), /list of notes/);
+    assert.match(parsePatchNotes('<html>'), /not an object/);
+  });
+
+  await check('the release post is a big heading over headed lists', () => {
+    assert.deepEqual(releaseMessages(parsed), [
+      [
+        '# NEW VERSION 2.1.0 RELEASE',
+        '',
+        '## Changelog:',
+        '- First thing',
+        '- Second thing',
+        '',
+        '## In testing:',
+        '- Share to Discord',
+        '',
+        '-# Installed copies will offer the update on next launch',
+      ].join('\n'),
+    ]);
+  });
+
+  await check('a role to ping goes on its own line under the heading', () => {
+    const [message] = releaseMessages(parsed, '<@&111>');
+    assert.ok(message.startsWith('# NEW VERSION 2.1.0 RELEASE\n<@&111>\n\n## Changelog:'));
+  });
+
+  await check('a role ping allows that role and nothing else', () => {
+    assert.deepEqual(rolePing('111', '999'), { content: '<@&111>', allowedMentions: { roles: ['111'] } });
+    assert.deepEqual(rolePing('999', '999'), { content: '@everyone', allowedMentions: { parse: ['everyone'] } });
+  });
+
+  await check('a version with nothing written still posts', () => {
+    const [message] = releaseMessages({ version: '2.1.0', sections: [] });
+    assert.match(message, /^# NEW VERSION 2\.1\.0 RELEASE/);
+    assert.match(message, /No notes/);
+  });
+
+  await check('long notes are split between lines into messages Discord accepts', () => {
+    const many = parsePatchNotes({
+      version: '2.1.0',
+      sections: [{ title: 'Changelog', notes: Array.from({ length: 40 }, (_, i) => `${i} ${'x'.repeat(150)}`) }],
+    });
+    const messages = releaseMessages(many, '<@&111>');
+    assert.ok(messages.length > 1);
+    assert.ok(messages.every((message) => message.length <= 2000 && message.trim().length > 0));
+    // Nothing lost and nothing cut: every note arrives whole, in order.
+    const notes = messages.join('\n').split('\n').filter((line) => line.startsWith('- '));
+    assert.deepEqual(notes, many.sections[0].notes.map((note) => `- ${note}`));
+  });
+
+  const answering = (status, body) => {
+    const calls = [];
+    const impl = async (url, init) => {
+      calls.push({ url, auth: init.headers.authorization });
+      return new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
+    };
+    return { impl, calls };
+  };
+
+  await check('patch notes are fetched from the update server with its token', async () => {
+    const { impl, calls } = answering(200, published);
+    const notes = await fetchPatchNotes('https://updates.example.com/', 'secret', impl);
+    assert.equal(notes.version, '2.1.0');
+    assert.deepEqual(calls, [{ url: 'https://updates.example.com/patch-notes.json', auth: 'Bearer secret' }]);
+  });
+
+  await check('each way the fetch fails says what to do, and never the token', async () => {
+    const cases = [
+      [answering(404, '').impl, /published yet/],
+      [answering(401, '').impl, /UPDATE_TOKEN/],
+      [answering(500, '').impl, /answered 500/],
+      [answering(200, '<html>').impl, /could not read/],
+      [async () => { throw new Error('ECONNREFUSED secret'); }, /could not reach/],
+    ];
+    for (const [impl, expected] of cases) {
+      await assert.rejects(fetchPatchNotes('https://updates.example.com', 'secret', impl), (error) => {
+        assert.match(error.message, expected);
+        assert.doesNotMatch(error.message, /secret/);
+        return true;
+      });
+    }
+  });
+}
 
 let failed = 0;
 for (const [ok, name, error] of results) {
