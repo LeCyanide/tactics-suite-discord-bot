@@ -9,8 +9,7 @@ under their name, and only in channels where they could post themselves.
 
 ## What you need
 
-- A server reachable on ports 80 and 443 (any small VPS), or a Discord bot
-  hosting panel with Node.js (see Option C).
+- A server reachable on ports 80 and 443 (any small VPS).
 - A hostname pointing at it (`bot.example.com` below). Without a domain,
   `bot.<ip-with-dashes>.sslip.io` works with no DNS setup, for example
   `bot.203-0-113-10.sslip.io`.
@@ -100,6 +99,9 @@ To update: `git pull && sudo docker compose up -d --build`
 To update:
 `cd /opt/tactics-bot && sudo git pull && sudo npm ci && sudo npm run build && sudo systemctl restart tactics-bot`
 
+<!-- Hidden until verified on a real panel. Also restore the "What you need"
+     bullet and the HTTP_HOST/TLS row in the .env table.
+
 ### Option C: a Discord bot hosting panel (Node.js)
 
 For hosts that run Node.js bots from a panel (Pterodactyl and similar). It
@@ -130,6 +132,8 @@ Cloudflare (free plan) for HTTPS.
 If your Cloudflare SSL/TLS mode is **Flexible**, set it to **Full**, or the
 bot's HTTPS port won't be reachable.
 
+-->
+
 ### The `.env` values
 
 | Variable | What it is |
@@ -139,7 +143,6 @@ bot's HTTPS port won't be reachable.
 | `DISCORD_CLIENT_SECRET` | The OAuth2 client secret |
 | `PUBLIC_URL` | `https://bot.example.com` |
 | `BOT_DOMAIN` | `bot.example.com` (Docker only) |
-| `HTTP_HOST`, `HTTP_PORT`, `TLS_CERT_FILE`, `TLS_KEY_FILE` | Hosting panels only (Option C) |
 
 Keep `.env` private: it holds the bot token and client secret.
 
