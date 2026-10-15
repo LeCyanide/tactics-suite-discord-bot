@@ -1,0 +1,45 @@
+# The bot behind Caddy, which fetches and renews the HTTPS certificate for
+# BOT_DOMAIN on its own. Ports 80 and 443 must reach this machine, and
+# BOT_DOMAIN must resolve to it.
+#
+#   cp .env.example .env    # fill it in
+#   docker compose up -d --build
+#   docker compose logs -f bot
+
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Inside the container these are fixed; the .env values are for running
+      # without Docker.
+      DB_PATH: /data/bot.db
+      HTTP_HOST: 0.0.0.0
+      HTTP_PORT: "8787"
+    volumes:
+      - bot-data:/data
+    # Not published: only Caddy reaches it.
+    expose:
+      - "8787"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      BOT_DOMAIN: ${BOT_DOMAIN:?set BOT_DOMAIN in .env}
+      BOT_UPSTREAM: bot:8787
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - bot
+
+volumes:
+  bot-data:
+  caddy-data:
+  caddy-config:

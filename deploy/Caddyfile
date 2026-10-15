@@ -1,0 +1,17 @@
+# Puts the bot's endpoints behind HTTPS. Caddy gets the certificate itself.
+#
+# BOT_DOMAIN is the hostname (bot.example.com), BOT_UPSTREAM where the bot
+# listens (127.0.0.1:8787 on the same machine, bot:8787 under Docker Compose).
+# The bot checks every token itself, so nothing is checked here.
+
+{$BOT_DOMAIN} {
+	# Nothing else on this host is public.
+	@api path /plan /health /link/*
+	handle @api {
+		reverse_proxy {$BOT_UPSTREAM:127.0.0.1:8787}
+	}
+
+	handle {
+		respond 404
+	}
+}

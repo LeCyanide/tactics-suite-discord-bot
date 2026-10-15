@@ -1,0 +1,32 @@
+# For running without Docker, under systemd. Assumes the bot is installed in
+# /opt/tactics-bot (dist/, node_modules/, .env) and runs as user tacticsbot:
+#
+#   sudo useradd --system --home-dir /opt/tactics-bot --shell /usr/sbin/nologin tacticsbot
+#   sudo install -d -o tacticsbot -g tacticsbot -m 700 /opt/tactics-bot/data
+#   sudo cp deploy/tactics-bot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now tactics-bot
+#
+# Logs: journalctl -u tactics-bot -f
+
+[Unit]
+Description=Discord bot for the WoWs Tactics Suite
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tacticsbot
+WorkingDirectory=/opt/tactics-bot
+ExecStart=/usr/bin/node --env-file=/opt/tactics-bot/.env /opt/tactics-bot/dist/bot.js
+Restart=always
+RestartSec=5
+
+# The bot needs nothing outside its own data directory.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/tactics-bot/data
+
+[Install]
+WantedBy=multi-user.target

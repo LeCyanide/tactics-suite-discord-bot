@@ -1,0 +1,26 @@
+{
+  "name": "tactics-suite-discord-bot",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Self-hostable Discord bot for the WoWs Tactics Suite: Connect Discord and Share to Discord",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && node scripts/build.mjs",
+    "start": "node --env-file=.env dist/bot.js",
+    "dev": "node --env-file=.env --watch src/index.ts",
+    "selftest": "node scripts/selftest.mjs"
+  },
+  "dependencies": {
+    "discord.js": "^14.27.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}

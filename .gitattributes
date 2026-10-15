@@ -1,0 +1,5 @@
+# Everything under deploy/ is read by Linux, where CRLF breaks things: a
+# systemd unit with carriage returns fails to parse, and so does a Caddy site
+# block. With core.autocrlf on, Windows checkouts would rewrite both.
+deploy/** text eol=lf
+*.sh text eol=lf
