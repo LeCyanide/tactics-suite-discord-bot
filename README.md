@@ -39,8 +39,8 @@ with `sudo`. Replace `bot.example.com` with your host.
    ```
 2. Get the bot and fill in `.env` (see [the values](#the-env-values)):
    ```bash
-   git clone https://github.com/LeCyanide/tactics-suite-discord-bit.git
-   cd tactics-suite-discord-bit
+   git clone https://github.com/LeCyanide/tactics-suite-discord-bot.git
+   cd tactics-suite-discord-bot
    cp .env.example .env
    nano .env
    ```
@@ -67,7 +67,7 @@ To update: `git pull && sudo docker compose up -d --build`
    [caddyserver.com/docs/install](https://caddyserver.com/docs/install#debian-ubuntu-raspbian).
 2. Get and build the bot:
    ```bash
-   sudo git clone https://github.com/LeCyanide/tactics-suite-discord-bit.git /opt/tactics-bot
+   sudo git clone https://github.com/LeCyanide/tactics-suite-discord-bot.git /opt/tactics-bot
    cd /opt/tactics-bot
    sudo npm ci && sudo npm run build
    ```
