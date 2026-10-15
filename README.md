@@ -10,8 +10,8 @@ under their name, and only in channels where they could post themselves.
 
 ## What you need
 
-- A server reachable on ports 80 and 443 (any small VPS), with Docker.
-- A hostname pointing at it. Without a domain,
+- A server reachable on ports 80 and 443 (any small VPS).
+- A hostname pointing at it (`bot.example.com` below). Without a domain,
   `bot.<ip-with-dashes>.sslip.io` works with no DNS setup, for example
   `bot.203-0-113-10.sslip.io`.
 
@@ -21,34 +21,95 @@ At <https://discord.com/developers/applications>, create a **New Application** a
 
 - the **Application ID** (General Information)
 - the bot **Token** (Bot → Reset Token)
-- the **Client Secret** (OAuth2), and add `https://<your-host>/link/callback` under **Redirects** on the same tab
+- the **Client Secret** (OAuth2), and add `https://bot.example.com/link/callback` under **Redirects** on the same tab
 
 Recommended: make the bot private so only you can add it to a server. Set
 **Installation → Install Link** to **None**, then turn off **Bot → Public
 Bot**.
 
-## 2. Configure and start
+## 2. Run it
 
-```bash
-git clone https://github.com/LeCyanide/tactics-suite-discord-bit.git
-cd tactics-suite-discord-bit
-cp .env.example .env    # fill it in
-docker compose up -d --build
-```
+Pick one option. Commands assume a fresh Debian or Ubuntu server and a user
+with `sudo`. Replace `bot.example.com` with your host.
+
+### Option A: Docker (recommended)
+
+1. Install Docker:
+   ```bash
+   curl -fsSL https://get.docker.com | sudo sh
+   ```
+2. Get the bot and fill in `.env` (see [the values](#the-env-values)):
+   ```bash
+   git clone https://github.com/LeCyanide/tactics-suite-discord-bit.git
+   cd tactics-suite-discord-bit
+   cp .env.example .env
+   nano .env
+   ```
+3. Start it. Caddy starts alongside and gets the HTTPS certificate itself:
+   ```bash
+   sudo docker compose up -d --build
+   ```
+4. Check it:
+   ```bash
+   curl https://bot.example.com/health    # {"ok":true,"ready":true,...}
+   sudo docker compose logs -f bot
+   ```
+
+To update: `git pull && sudo docker compose up -d --build`
+
+### Option B: Node.js and Caddy, without Docker
+
+1. Install Node.js 24 and Caddy:
+   ```bash
+   curl -fsSL https://deb.nodesource.com/setup_24.x | sudo bash -
+   sudo apt install -y nodejs git caddy
+   ```
+   If `caddy` is not found, add its repository first:
+   [caddyserver.com/docs/install](https://caddyserver.com/docs/install#debian-ubuntu-raspbian).
+2. Get and build the bot:
+   ```bash
+   sudo git clone https://github.com/LeCyanide/tactics-suite-discord-bit.git /opt/tactics-bot
+   cd /opt/tactics-bot
+   sudo npm ci && sudo npm run build
+   ```
+3. Create its user and data folder, and fill in `.env` (see [the values](#the-env-values)):
+   ```bash
+   sudo useradd --system --no-create-home --shell /usr/sbin/nologin tacticsbot
+   sudo install -d -o tacticsbot -g tacticsbot -m 700 data
+   sudo cp .env.example .env
+   sudo nano .env
+   sudo chown root:tacticsbot .env && sudo chmod 640 .env
+   ```
+4. Run it as a service:
+   ```bash
+   sudo cp deploy/tactics-bot.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now tactics-bot
+   ```
+5. Put HTTPS in front with Caddy (this replaces Caddy's default config):
+   ```bash
+   sed 's/{\$BOT_DOMAIN}/bot.example.com/' deploy/Caddyfile | sudo tee /etc/caddy/Caddyfile
+   sudo systemctl reload caddy
+   ```
+6. Check it:
+   ```bash
+   curl https://bot.example.com/health    # {"ok":true,"ready":true,...}
+   journalctl -u tactics-bot -f
+   ```
+
+To update:
+`cd /opt/tactics-bot && sudo git pull && sudo npm ci && sudo npm run build && sudo systemctl restart tactics-bot`
+
+### The `.env` values
 
 | Variable | What it is |
 | --- | --- |
 | `DISCORD_TOKEN` | The bot token |
 | `DISCORD_APP_ID` | The application ID |
 | `DISCORD_CLIENT_SECRET` | The OAuth2 client secret |
-| `PUBLIC_URL` | `https://<your-host>` |
-| `BOT_DOMAIN` | `<your-host>` |
+| `PUBLIC_URL` | `https://bot.example.com` |
+| `BOT_DOMAIN` | `bot.example.com` (Docker only) |
 | `UPDATE_URL`, `UPDATE_TOKEN` | Optional, for `/release`: the suite's update server. Without them `/release` says it is not set up. |
-
-Caddy, started alongside the bot, gets the HTTPS certificate on its own.
-Check that it is up with `curl https://<your-host>/health`, and watch the log
-with `docker compose logs -f bot`. To update later:
-`git pull && docker compose up -d --build`.
 
 Keep `.env` private: it holds the bot token and client secret.
 
@@ -66,21 +127,8 @@ server can change that under Server Settings → Integrations.
 
 ## 4. Point the suite at it
 
-Each member enters `https://<your-host>` under **Settings → Share to Discord →
+Each member enters `https://bot.example.com` under **Settings → Share to Discord →
 Bot** in the suite, then presses **Connect Discord**.
-
-## Without Docker
-
-Node.js 24 or newer:
-
-```bash
-npm ci && npm run build && npm start
-```
-
-Put an HTTPS reverse proxy in front: `deploy/Caddyfile` is a ready-made site
-block, and only `/plan`, `/health` and `/link/*` need to be public.
-`deploy/tactics-bot.service` runs it under systemd. Set `HTTP_HOST`,
-`HTTP_PORT` and `DB_PATH` in `.env` if the defaults don't suit.
 
 ## How it works
 

@@ -1,10 +1,6 @@
-# For running without Docker, under systemd. Assumes the bot is installed in
-# /opt/tactics-bot (dist/, node_modules/, .env) and runs as user tacticsbot:
-#
-#   sudo useradd --system --home-dir /opt/tactics-bot --shell /usr/sbin/nologin tacticsbot
-#   sudo install -d -o tacticsbot -g tacticsbot -m 700 /opt/tactics-bot/data
-#   sudo cp deploy/tactics-bot.service /etc/systemd/system/
-#   sudo systemctl daemon-reload && sudo systemctl enable --now tactics-bot
+# Runs the bot under systemd, without Docker. Expects it built in
+# /opt/tactics-bot and a system user tacticsbot; README.md, "Option B",
+# has the steps.
 #
 # Logs: journalctl -u tactics-bot -f
 
