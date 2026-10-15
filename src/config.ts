@@ -5,6 +5,7 @@
  * rather than failing later on the first sign-in.
  */
 
+import { existsSync } from 'node:fs';
 import { log } from './log.ts';
 
 export interface Config {
@@ -20,11 +21,10 @@ export interface Config {
   readonly httpPort: number;
   readonly httpHost: string;
   /**
-   * The suite's update server, where /release reads the patch notes. Both
-   * null leaves /release answering that it is not set up.
+   * Certificate and key files, when the bot serves HTTPS itself. Null when a
+   * reverse proxy in front does it, which is the usual case.
    */
-  readonly updateUrl: string | null;
-  readonly updateToken: string | null;
+  readonly tls: { readonly cert: string; readonly key: string } | null;
 }
 
 function required(name: string): string {
@@ -36,7 +36,32 @@ function required(name: string): string {
   return value;
 }
 
+function tlsFiles(): Config['tls'] {
+  const cert = process.env.TLS_CERT_FILE?.trim() || '';
+  const key = process.env.TLS_KEY_FILE?.trim() || '';
+  if (cert === '' && key === '') return null;
+  if (cert === '' || key === '') {
+    log.error('Set both TLS_CERT_FILE and TLS_KEY_FILE, or neither.');
+    process.exit(1);
+  }
+  for (const file of [cert, key]) {
+    if (!existsSync(file)) {
+      log.error(`${file} does not exist (from TLS_CERT_FILE / TLS_KEY_FILE).`);
+      process.exit(1);
+    }
+  }
+  return { cert, key };
+}
+
 export function loadConfig(): Config {
+  // Bot hosting panels start `node index.js` with no --env-file, so a .env
+  // beside it is read here. Values already in the environment win.
+  try {
+    process.loadEnvFile('.env');
+  } catch {
+    /* no .env: everything comes from the environment */
+  }
+
   const publicUrl = required('PUBLIC_URL').replace(/\/+$/, '');
   let parsed: URL;
   try {
@@ -62,7 +87,6 @@ export function loadConfig(): Config {
     // Meant to sit behind a reverse proxy that terminates TLS, so by default
     // it is not reachable from anywhere else. The Docker image sets 0.0.0.0.
     httpHost: process.env.HTTP_HOST?.trim() || '127.0.0.1',
-    updateUrl: process.env.UPDATE_URL?.trim() || null,
-    updateToken: process.env.UPDATE_TOKEN?.trim() || null,
+    tls: tlsFiles(),
   };
 }

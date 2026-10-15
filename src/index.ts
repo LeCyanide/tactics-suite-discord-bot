@@ -2,14 +2,12 @@
  * Entry point. Opens the database, connects to Discord, and serves the
  * endpoints the suite talks to.
  *
- * It exists so that a copy of the suite can sign in with Discord and post a
- * plan into a channel, only ever where the person sharing could post
- * themselves. Its one slash command, /release, posts the suite's patch notes.
- * It reads no messages.
+ * The bot has no slash commands and reads no messages. It exists so that a
+ * copy of the suite can sign in with Discord and post a plan into a channel,
+ * and it only ever posts where the person sharing could post themselves.
  */
 
-import { Client, Events, GatewayIntentBits, MessageFlags } from 'discord.js';
-import { release } from './commands/release.ts';
+import { Client, Events, GatewayIntentBits } from 'discord.js';
 import { loadConfig } from './config.ts';
 import { openDatabase } from './db.ts';
 import { startHttpServer } from './http.ts';
@@ -26,16 +24,8 @@ const db = openDatabase(config.dbPath);
 // or shares, which needs no privileged intent.
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-client.once(Events.ClientReady, async (ready) => {
+client.once(Events.ClientReady, (ready) => {
   log.info(`connected as ${ready.user.tag} (${ready.user.id})`);
-
-  // Registered on every start, globally, so there is no separate step and
-  // every server the bot is in has it. Setting the same list again is a no-op.
-  try {
-    await ready.application.commands.set([release.data.toJSON()]);
-  } catch (error) {
-    log.error('could not register /release', error);
-  }
 
   for (const guild of ready.guilds.cache.values()) {
     log.info(`serving ${guild.name} (${guild.id})`);
@@ -54,23 +44,6 @@ client.once(Events.ClientReady, async (ready) => {
 
 client.on(Events.GuildCreate, (guild) => {
   log.info(`added to ${guild.name} (${guild.id})`);
-});
-
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand() || interaction.commandName !== release.data.name) return;
-  try {
-    await release.execute(interaction, config);
-  } catch (error) {
-    // Without this the person sees only "The application did not respond".
-    log.error('/release failed', error);
-    const body = { content: 'That did not work. The error has been logged.', flags: MessageFlags.Ephemeral } as const;
-    try {
-      if (interaction.deferred || interaction.replied) await interaction.followUp(body);
-      else await interaction.reply(body);
-    } catch (nested) {
-      log.error('could not report the failure', nested);
-    }
-  }
 });
 
 const http = startHttpServer(client, config, db);

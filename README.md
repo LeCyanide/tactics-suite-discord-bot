@@ -6,11 +6,11 @@ your own server.
 Members press **Connect Discord** in the suite's Settings once, sign in with
 Discord, and can then share a plan straight into a channel. The bot posts it
 under their name, and only in channels where they could post themselves.
-`/release` posts the suite's latest patch notes in the channel it is used in.
 
 ## What you need
 
-- A server reachable on ports 80 and 443 (any small VPS).
+- A server reachable on ports 80 and 443 (any small VPS), or a Discord bot
+  hosting panel with Node.js (see Option C).
 - A hostname pointing at it (`bot.example.com` below). Without a domain,
   `bot.<ip-with-dashes>.sslip.io` works with no DNS setup, for example
   `bot.203-0-113-10.sslip.io`.
@@ -100,6 +100,36 @@ To update: `git pull && sudo docker compose up -d --build`
 To update:
 `cd /opt/tactics-bot && sudo git pull && sudo npm ci && sudo npm run build && sudo systemctl restart tactics-bot`
 
+### Option C: a Discord bot hosting panel (Node.js)
+
+For hosts that run Node.js bots from a panel (Pterodactyl and similar). It
+needs a panel that gives the server its own port, and a domain on
+Cloudflare (free plan) for HTTPS.
+
+1. Create a **Node.js** server and pick **Node 24** as its version or image.
+   Note the **IP** and **port** the panel assigns.
+2. Upload `index.js`, `package.json`, `package-lock.json` and the `src`
+   folder (or set the panel's Git repository to this repo). Set the startup
+   or main file to `index.js`. The panel installs the dependencies.
+3. In Cloudflare:
+   - **DNS**: add an `A` record `bot` → the server's IP, **Proxied**.
+   - **Rules → Origin Rules**: when hostname equals `bot.example.com`,
+     rewrite the destination port to the panel's port.
+   - **SSL/TLS → Origin Server**: create a certificate for `bot.example.com`
+     and save it as `cert.pem` and `key.pem`.
+4. Upload `cert.pem` and `key.pem`, and create `.env` in the file manager
+   (see [the values](#the-env-values)), with:
+   ```
+   HTTP_HOST=0.0.0.0
+   HTTP_PORT=<the panel's port>
+   TLS_CERT_FILE=cert.pem
+   TLS_KEY_FILE=key.pem
+   ```
+5. Start the server and open `https://bot.example.com/health` in a browser.
+
+If your Cloudflare SSL/TLS mode is **Flexible**, set it to **Full**, or the
+bot's HTTPS port won't be reachable.
+
 ### The `.env` values
 
 | Variable | What it is |
@@ -109,7 +139,7 @@ To update:
 | `DISCORD_CLIENT_SECRET` | The OAuth2 client secret |
 | `PUBLIC_URL` | `https://bot.example.com` |
 | `BOT_DOMAIN` | `bot.example.com` (Docker only) |
-| `UPDATE_URL`, `UPDATE_TOKEN` | Optional, for `/release`: the suite's update server. Without them `/release` says it is not set up. |
+| `HTTP_HOST`, `HTTP_PORT`, `TLS_CERT_FILE`, `TLS_KEY_FILE` | Hosting panels only (Option C) |
 
 Keep `.env` private: it holds the bot token and client secret.
 
@@ -122,8 +152,7 @@ https://discord.com/oauth2/authorize?client_id=<APP_ID>&scope=bot&permissions=52
 ```
 
 That grants View Channel, Send Messages, Embed Links and Attach Files, which
-is all it needs. `/release` is limited to members who can manage messages; a
-server can change that under Server Settings → Integrations.
+is all it needs.
 
 ## 4. Point the suite at it
 
@@ -139,10 +168,9 @@ person's current roles in Discord.
 
 | File | What it does |
 | --- | --- |
-| `src/index.ts` | Entry point: opens the database, connects, registers `/release` |
+| `src/index.ts` | Entry point: opens the database and connects |
 | `src/http.ts` | The endpoints: `/health`, `/plan` and `/link/*` |
 | `src/link.ts` | The Connect Discord sign-in and the per-person permission checks |
-| `src/release.ts`, `src/commands/release.ts` | `/release`: fetching the patch notes and posting them |
 | `src/db.ts`, `src/migrations.ts` | One SQLite file holding which app tokens belong to whom |
 | `src/config.ts` | Reads and checks `.env` |
 
@@ -150,7 +178,7 @@ person's current roles in Discord.
 
 ```bash
 npm run typecheck
-npm run selftest    # endpoints, sign-in and patch notes, against stubs
+npm run selftest    # endpoints and sign-in, against stubs
 npm run dev         # runs from source, restarts on changes
 ```
 

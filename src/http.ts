@@ -13,7 +13,10 @@
  * there is no reason for this to face the internet directly.
  */
 
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { readFileSync } from 'node:fs';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { createServer as createTlsServer } from 'node:https';
+import type { Server } from 'node:net';
 import { AttachmentBuilder, EmbedBuilder, type Client } from 'discord.js';
 import type { Config } from './config.ts';
 import type { Database } from './db.ts';
@@ -163,12 +166,19 @@ export function startHttpServer(
   db: Database,
   linker: Linker = Linker.fromConfig(client, db, config),
 ): Server {
-  const server = createServer((request, response) => {
+  const listener = (request: IncomingMessage, response: ServerResponse): void => {
     void handle(request, response).catch((error: unknown) => {
       log.error('http endpoint threw', error);
       if (!response.headersSent) send(response, 500, { error: 'internal error' });
     });
-  });
+  };
+
+  // HTTPS itself only where nothing in front terminates it: on a hosting
+  // panel behind Cloudflare, with an origin certificate.
+  const server =
+    config.tls === null
+      ? createServer(listener)
+      : createTlsServer({ cert: readFileSync(config.tls.cert), key: readFileSync(config.tls.key) }, listener);
 
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const url = new URL(request.url ?? '/', 'http://localhost');
@@ -323,7 +333,8 @@ export function startHttpServer(
   }
 
   server.listen(config.httpPort, config.httpHost, () => {
-    log.info(`plan endpoint listening on ${config.httpHost}:${config.httpPort}`);
+    const scheme = config.tls === null ? 'http' : 'https';
+    log.info(`plan endpoint listening on ${scheme}://${config.httpHost}:${config.httpPort}`);
   });
 
   return server;
